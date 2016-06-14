@@ -1,57 +1,50 @@
 'use strict';
-
+var https = require("https");
 var path = process.cwd();
-var ClickHandler = require(path + '/app/controllers/clickHandler.server.js');
+var search = [];
 
 module.exports = function (app, passport) {
-
-	function isLoggedIn (req, res, next) {
-		if (req.isAuthenticated()) {
-			return next();
-		} else {
-			res.redirect('/login');
-		}
-	}
-
-	var clickHandler = new ClickHandler();
-
+	var urlToSearch = "https://www.googleapis.com/customsearch/v1?searchType=image&key=AIzaSyCy6weQvTrlalICCXMlOq3hLCz4Atl1OeA&cx=018429231957585796505:d02h80r2nam";
 	app.route('/')
-		.get(isLoggedIn, function (req, res) {
+		.get(function (req, res) {
 			res.sendFile(path + '/public/index.html');
 		});
-
-	app.route('/login')
-		.get(function (req, res) {
-			res.sendFile(path + '/public/login.html');
+		
+	app.get(/\/(api\/imagesearch)+/, function(req, res){
+		var number="";
+		var searchRequset = req.path.replace("/api/imagesearch/", "");
+		if (Object.keys(req.query).length !== 0){
+			number = req.query.offset;
+		}
+		
+		search.push({"title" : searchRequset});
+		
+		var start = 0;
+		var result = "";
+		
+		if (number){
+			var urlTo = urlToSearch + "&q=" + searchRequset + "&num=" + number;
+		} else {
+			urlTo = urlToSearch + "&q=" + searchRequset
+		}
+		
+		https.get(urlTo, function(response){
+			
+			response.setEncoding("utf8");
+			response.on("data", function(data){
+				result += data;
+			});
+		
+			response.on("end", function(){
+				start = result.indexOf('\"items\":');
+				result = result.slice(start, result.lastIndexOf("}")).replace(/"items": /, "");
+				var json = JSON.parse(result);
+				res.send(json);
+			})
 		});
-
-	app.route('/logout')
-		.get(function (req, res) {
-			req.logout();
-			res.redirect('/login');
-		});
-
-	app.route('/profile')
-		.get(isLoggedIn, function (req, res) {
-			res.sendFile(path + '/public/profile.html');
-		});
-
-	app.route('/api/:id')
-		.get(isLoggedIn, function (req, res) {
-			res.json(req.user.github);
-		});
-
-	app.route('/auth/github')
-		.get(passport.authenticate('github'));
-
-	app.route('/auth/github/callback')
-		.get(passport.authenticate('github', {
-			successRedirect: '/',
-			failureRedirect: '/login'
-		}));
-
-	app.route('/api/:id/clicks')
-		.get(isLoggedIn, clickHandler.getClicks)
-		.post(isLoggedIn, clickHandler.addClick)
-		.delete(isLoggedIn, clickHandler.resetClicks);
+	app.get(/\/(api\/latest)+/, function(req, res){
+		res.send(search);
+	})	
+	});
 };
+//https://www.googleapis.com/customsearch/v1?searchType=image&key=AIzaSyCy6weQvTrlalICCXMlOq3hLCz4Atl1OeA&cx=018429231957585796505:d02h80r2nam&q=car&num=10
